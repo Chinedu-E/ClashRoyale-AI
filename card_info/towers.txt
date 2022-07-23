@@ -1,0 +1,3 @@
+type,Hitpoints,Range,Hitspeed,Damage
+king,2736,7,1,58
+princess,1624,7.5,0.8,58

@@ -1,0 +1,9 @@
+name,type,dps,hitpoints,hitspeed,targets,speed,range,count,ct-damage,area-damage,radius,elixir
+knight,troop,95,950,1.2,ground,medium,melee-medium,1,115,0,0,3
+archers,troop,50,143,1.1,ang,medium,5,2,50,0,0,3
+minions,troop,58,131,1,ang,fast,melee-long,3,58,0,0,3
+giant,troop,96,2335,1.5,building,slow,melee-medium,1,145,0,0,5
+prince,troop,175,1200,1.4,ground,medium,melee-long,1,245,0,0,5
+goblins,troop,61,115,1.1,ground,very fast,melee-short,3,68,0,0,3
+fireball,spell,0,0,0,all,0,0,0,118,393,2.5,4
+arrows,spell,0,0,0,all,0,0,0,54,174,4,3
