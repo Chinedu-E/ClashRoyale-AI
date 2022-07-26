@@ -66,6 +66,7 @@ class Recorder:
 class Decks:
     
     def __init__(self):
+        self.scaler = StandardScaler()
         self.card_id = {"giant": cv2.imread(r"E:\RL\Clash\assets\giant_id.png", 0),
                         "fireball": cv2.imread(r"E:\RL\Clash\assets\fireball_id.png", 0),
                         "arrows": cv2.imread(r"E:\RL\Clash\assets\arrows_id.png", 0),
@@ -75,13 +76,12 @@ class Decks:
                         "prince": cv2.imread(r"E:\RL\Clash\assets\prince_id.png", 0),
                         "archers": cv2.imread(r"E:\RL\Clash\assets\archers_id.png", 0),}
 
-        card_stats = pd.read_csv(r"E:\RL\Clash Royale\workspace\card_stats\cards.txt", index_col="name")
-        self.card_stats = pd.get_dummies(card_stats)
-
-        
+        deck_stats = pd.read_csv(r"E:\RL\Clash Royale\workspace\card_stats\cards.txt", index_col="name")
+        self.deck_stats = pd.get_dummies(deck_stats)
+        self.cards_stats: pd.DataFrame = ClashDataLoader().load_data()
         self.tower_stats = pd.read_csv(r"E:\RL\Clash Royale\workspace\card_stats\towers.txt", index_col="type")
         
-    def get_curr_hand(self, img):
+    def get_curr_hand(self, img) -> list[str]:
         curr_hand = []
         for card, template in self.card_id.items():
             res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
@@ -93,6 +93,18 @@ class Decks:
                 
         return curr_hand
     
+    def get_card_features(self, img) -> np.ndarray:
+        card_feats = np.zeros((4, 24))
+        tower_feats = self.tower_stats.values
+        tower_feats = self.scaler.fit_transform(tower_feats).flatten()
+        cards = self.get_curr_hand(img)
+        for i,card in enumerate(cards):
+            card_feats[i] = self.deck_stats.loc[card].values
+        card_feats = self.scaler.fit_transform(card_feats)
+        card_feats = card_feats.flatten()
+        all_feats = np.concatenate((card_feats, tower_feats))
+        
+        return all_feats
     
 class GameHelper:
 
@@ -190,19 +202,6 @@ class GameHelper:
         except:
             elixir = self.curr_elixir
         return elixir
-    
-
-    def get_card_features(self,img, deck: Decks) -> np.ndarray:
-        card_feats = np.zeros((4, 24))
-        tower_feats = deck.tower_stats.values
-        tower_feats = self.scaler.fit_transform(tower_feats).flatten()
-        cards = deck.get_curr_hand(img)
-        for i,card in enumerate(cards):
-            card_feats[i] = deck.card_stats.loc[card].values
-        card_feats = self.scaler.fit_transform(card_feats)
-        card_feats = card_feats.flatten()
-        all_feats = np.concatenate((card_feats, tower_feats))
-        return all_feats
         
     @staticmethod
     def on_home_screen(img) -> bool:
