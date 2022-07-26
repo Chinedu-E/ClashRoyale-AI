@@ -22,12 +22,12 @@ class ClashRoyaleEnv(Env):
         self.helper = GameHelper()
         self.deck = Decks()
         self.recorder = Recorder()
-        self.battle_pos = (350, 600)
-        self.dm_menu_pos = (430, 115)
-        self.tc_pos = (280, 300)
-        self.ok_pos = (330, 505)
+        self.battle_pos = (350, 600) #
+        self.dm_menu_pos = (430, 115) #position of dropdown menu in home screen
+        self.tc_pos = (280, 300) #position of training camp menu in home screen
+        self.ok_pos = (330, 505) #position of confirmation button to enter game
         
-    def step(self, action):
+    def step(self, action) -> tuple[np.ndarray, int, bool]:
         #time.sleep(0.5)
         card_choice = action[0][0]
         if card_choice == 1:
@@ -54,7 +54,7 @@ class ClashRoyaleEnv(Env):
         
         img_state = self.helper.screenshot()
         reward, done = self.reward_function(img_state)
-        card_state = self.helper.get_card_features(img_state, self.deck)
+        card_state = self.deck.get_card_features(img_state)
         img_state = self.helper.add_imageProc(img_state)
         states = [img_state, card_state]
         
@@ -68,13 +68,13 @@ class ClashRoyaleEnv(Env):
         time.sleep(0.5)
         pyautogui.click(232, 740)      
         
-    def reward_function(self, img):
+    def reward_function(self, img) -> tuple[int, bool]:
         reward = 0
         done = False
         
         return reward, done
         
-    def start(self):
+    def start(self) -> tuple[np.ndarray, np.ndarray]:
         '''Takes us from the home screen into the game
         '''
         time.sleep(1)
@@ -96,10 +96,10 @@ class ClashRoyaleEnv(Env):
                 screen = self.helper.screenshot()
                 break
             
-        return self.helper.add_imageProc(screen), self.helper.get_card_features(screen, self.deck)
+        return self.helper.add_imageProc(screen), self.deck.get_card_features(screen)
             
         
-    def adj_observation(self, states):
+    def adj_observation(self, states) -> list[tf.Tensor, tf.Tensor]:
         converted_states = []
         for state in states:
             converted_states.append(tf.convert_to_tensor(state, dtype=tf.float32))
