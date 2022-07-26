@@ -33,7 +33,7 @@ class ClashScraper:
         response = requests.get(self.web_host+card.replace(" ", "+"))
         data = pd.read_html(response.text)[0]
         self.set_index(card, data)
-        data.to_csv(f'./images/{card}/{card}.csv')
+        data.to_csv(f'card_info/all_stats/{card}/{card}.csv')
         
     def run(self):
         found = 0
@@ -58,27 +58,27 @@ class ClashScraper:
 class ClashDataLoader:
     
     def __init__(self):
-        self.cards = ClashScraper.get_card_names('all_cards.json')
+        self.cards = ClashScraper.get_card_names('card_info/all_cards.json')
         
         
     def load_data(self, as_array = False) -> pd.DataFrame:
         main_df = pd.DataFrame()
         try:
             for card in self.cards:
-                df = pd.read_csv((f'./images/{card}/{card}.csv'))
+                df = pd.read_csv((f'card_info/all_stats/{card}/{card}.csv'))
                 main_df = pd.concat([main_df, df])
                 
         except FileNotFoundError: #spell cards that could not be scraped
             pass
         
-        main_df = self._clean_data(main_df)
+        main_df = self.__clean_data(main_df)
         
         if as_array:
             return main_df.values
         
         return main_df
     
-    def _clean_data(self, data: pd.DataFrame) -> pd.DataFrame:
+    def __clean_data(self, data: pd.DataFrame) -> pd.DataFrame:
         
         data.fillna(0, inplace=True)
         arr = data[["name", "Card Level"]].values.T
@@ -94,7 +94,7 @@ class ClashDataLoader:
     
     
 def main():
-    scraper = ClashScraper('all_cards.json')
+    scraper = ClashScraper('card_info/all_cards.json')
     scraper.run()
     
 if __name__ == '__main__':
