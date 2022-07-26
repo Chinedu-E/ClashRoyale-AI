@@ -47,7 +47,7 @@ class ActorNet:
         x = LeakyReLU()(x)
         x = Dense(128, kernel_initializer='he_uniform')(x)
         x = LeakyReLU()(x)
-        parameters = Dense(8, activation="linear")(x)
+        parameters = Dense(8, activation="sigmoid")(x)
     
         #parameters = Lambda(lambda i: i* self.act_range)(parameters)
         return Model(inputs = [input_a, input_b], outputs =parameters)
