@@ -15,7 +15,7 @@ class ClashRoyaleEnv(Env):
     
     def __init__(self):
         self.action_space = Dict({"card_choice": Discrete(5),
-                                 "position" : Box(low= np.array([35, 95]), high=np.array([405, 605]), shape =(2,), dtype = int)}
+                                 "position" : Box(low= np.array([45, 150]), high=np.array([405, 600]), shape =(2,), dtype = int)}
                                  )
         self.observation_space= Dict({"image": Box(low=0, high=1, shape=(208, 160, 1), dtype=float),
                                       'features': Box(low=0, high=1, shape=(104,), dtype=float)})
@@ -46,8 +46,10 @@ class ClashRoyaleEnv(Env):
         
         if card_choice != 0:
             position = action[1].reshape(4, 2)[card_choice-1]
-            print(position)
-            pyautogui.click(tuple(np.abs(position)))
+            diff = self.action_space['position'].high - self.action_space['position'].low
+            offset = diff * position
+            position = self.action_space['position'].low + offset
+            pyautogui.click(tuple(position))
             
         pos = tuple(position) if card_choice != 0 else (0, 0)   
         self.recorder((card_choice, pos), 'action')
