@@ -106,17 +106,26 @@ class GameHelper:
                             "eking_t": cv2.imread(r"E:\RL\Clash\assets\ekingt_id.png", 0),
                             "eprincesst": cv2.imread(r"E:\RL\Clash\assets\eprincesst_id.png", 0)
                             }
+        self.enemy_level_id = {1: (cv2.imread("red-level01.png"), .75),
+                               2: (cv2.imread("red-level02.png"), .72),
+                               3: (cv2.imread("red-level03.png"), .78),
+                               4: (cv2.imread("red-level04.png"), .75),
+                               5: (cv2.imread("red-level05.png"), .78),
+                               6: (cv2.imread("red-level06.png"), .75),
+                               7: (cv2.imread("red-level07.png"), .78),
+                               8: (cv2.imread("red-level08.png"), .75),}
        
     def screenshot(self, unprocessed: bool =False):
         with mss.mss() as sct:
             img = np.array(sct.grab(GAME_MON))
 
         if unprocessed:
-            return self.process_ocr(img)
+            return img
         img = GameHelper.process_image(img)
         #img = GameHelper.add_imageProc(img)
         return img
     
+    @staticmethod
     def process_ocr(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         img = cv2.GaussianBlur(img, (7, 7), 0)
@@ -154,7 +163,7 @@ class GameHelper:
         time = int(time[0])*60 + int(time[1])
         return time
     
-    def tower_count(self, img):
+    def tower_count(self, img) -> tuple[int, int]:
         friendly_count = 0
         enemy_count = 0
         for tower,template in self.tower_id.items():
@@ -183,7 +192,7 @@ class GameHelper:
         return elixir
     
 
-    def get_card_features(self,img, deck: Decks):
+    def get_card_features(self,img, deck: Decks) -> np.ndarray:
         card_feats = np.zeros((4, 24))
         tower_feats = deck.tower_stats.values
         tower_feats = self.scaler.fit_transform(tower_feats).flatten()
@@ -205,7 +214,7 @@ class GameHelper:
         else: return True
         
     @staticmethod
-    def on_party_screen(img):
+    def on_party_screen(img) -> bool:
         template = cv2.imread('assets/party_id.png', 0)
         res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
         threshold = 0.9
@@ -223,10 +232,22 @@ class GameHelper:
         else: return True
         
     @staticmethod
-    def on_end_game_screen(img):
+    def on_end_game_screen(img) -> bool:
         template = cv2.imread('assets/end_game_id.png', 0)
         res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
         threshold = 0.6
         loc = np.where( res >= threshold)
         if len(loc[0]) == 0: return False
         else: return True
+        
+    def find_enemies(self, img) - list[tuple[int, tuple[np.ndarray, np.ndarray]] : 
+        to_bgr = lambda x: cv2.cvtColor(x, cv2.COLOR_BGR2RGB)
+        enemies = []
+        for level, (template, threshold) in self.enemy_level_id.items():
+            template = to_bgr(template)
+            res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
+            loc = np.where( res >= threshold)
+            if len(loc[0]) == 0: ...
+            else: enemies.append((level, loc))
+            
+        return enemies
