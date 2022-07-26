@@ -51,7 +51,7 @@ class PDQN:
         self.buffer = MemoryBuffer(10000, with_per=w_per)
         self.batch_size = batch_size
         # OU-Noise-Process
-        self.noise = OUActionNoise(size=self.act_dim)
+        self.noise = OUActionNoise(size=8)
         
     ###################################################
     # Network Related
@@ -67,7 +67,7 @@ class PDQN:
         disc = self.critic.predict([z_space, card_feat, parameters_])[0]
         
         parameters_= np.array(parameters_)
-        param = np.clip(parameters_.reshape(4, 2) + (self.noise.generate(t) if noise else 0), self.min_action, self.max_action)
+        param = np.clip(parameters_ + (self.noise.generate(t) if noise else 0), 0, 1)
         
         rnd = np.random.uniform()
         if rnd < self.epsilon:
@@ -139,9 +139,14 @@ class PDQN:
     def memorize(self,obs,act,reward,done,new_obs):
         """store experience in the buffer"""
         if self.with_per:
-            q_val = self.critic.network([*obs,self.actor.predict(obs)])
-            next_action = self.actor.target_network.predict(np.expand_dims(new_obs, axis=0))
-            q_val_t = self.critic.target_predict([np.expand_dims(new_obs,axis=0), next_action])
+            z_space = self.vae.encoder(obs[0].reshape(1, *INPUT_DIM))
+            card_feat = obs[1].reshape(1, self.obs_dim[1][0])
+            q_val = self.critic.network([z_space, card_feat,self.actor.predict([z_space, card_feat])])
+            
+            new_z_space = self.vae.encoder(obs[0].reshape(1, *INPUT_DIM))
+            new_card_feat = obs[1].reshape(1, self.obs_dim[1][0])
+            next_action = self.actor.target_network.predict([new_z_space, new_card_feat])
+            q_val_t = self.critic.target_predict([new_z_space, new_card_feat, next_action])
             new_val = reward + self.discount_factor * q_val_t
             td_error = abs(new_val - q_val)[0]
         else:
