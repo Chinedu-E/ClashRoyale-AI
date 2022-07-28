@@ -4,88 +4,53 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from utils.config import INPUT_DIM, READER, NORMALIZE, GAME_MON
+from card_info.card_stats_scraper import ClashDataLoader
 
 
 class Recorder:
     
     def __init__(self):
-        self.__past_action: tuple = None
-        self.__past_friendly_towers: int = 3
-        self.__past_enemy_towers: int = 3
-        self.__past_elixir: int = 5
-        self.__past_time = 180
+        self.__past_params = {'enemy_positions':[], 'elixir':5, 'time': 180, 'tower_count': (3, 3)}
+        self.__past_action = (0, (0, 0))
         
-    def __call__(self, event, event_name):
-        if event_name == 'action':
-            self.record_action(event)
-        elif event_name == 'towers':
-            self.record_friendly_towers(event[0])
-            self.record_enemy_towers(event[1])
-        elif event_name == 'elixir':
-            self.record_elixir(event)
-        elif event_name == 'time':
-            self.record_time(event)
-    
-    def record_action(self, action):
+    def __call__(self, params):
+        self.__past_params = params
+        
+    def save_action(self, action):
         self.__past_action = action
-        
-    def record_friendly_towers(self, friendly_towers: int):
-        self.__past_friendly_towers = friendly_towers
-        
-    def record_enemy_towers(self, enemy_towers: int):
-        self.__past_enemy_towers = enemy_towers
-        
-    def record_elixir(self, elixir: int):
-        self.__past_elixir = elixir
-        
-    def record_time(self, time: int):
-        self.__past_time = time
-        
-    def get_past_towers(self):
-        return self.past_friendly_towers, self.past_enemy_towers
     
     @property
-    def past_time(self): return self.__past_time
+    def past(self): return self.__past_params
     
     @property
-    def past_elixir(self): return self.__past_elixir
-    
-    @property
-    def past_action(self): return self.__past_action
-    
-    @property
-    def past_friendly_towers(self): return self.__past_friendly_towers
-    
-    @property
-    def past_enemy_towers(self): return self.__past_enemy_towers
-    
-    @property
-    def past_towers(self): return self.__past_friendly_towers, self.__past_enemy_towers
+    def past_action(self): return self.__past_action  
     
     
 class Decks:
     
     def __init__(self):
         self.scaler = StandardScaler()
-        self.card_id = {"giant": cv2.imread(r"E:\RL\Clash\assets\giant_id.png", 0),
-                        "fireball": cv2.imread(r"E:\RL\Clash\assets\fireball_id.png", 0),
-                        "arrows": cv2.imread(r"E:\RL\Clash\assets\arrows_id.png", 0),
-                        "goblins": cv2.imread(r"E:\RL\Clash\assets\goblins_id.png", 0),
-                        "knight": cv2.imread(r"E:\RL\Clash\assets\knight_id.png", 0),
-                        "minions": cv2.imread(r"E:\RL\Clash\assets\minions_id.png", 0),
-                        "prince": cv2.imread(r"E:\RL\Clash\assets\prince_id.png", 0),
-                        "archers": cv2.imread(r"E:\RL\Clash\assets\archers_id.png", 0),}
+        self.card_id = {"giant": cv2.imread("assets/giant_id.png", 0),
+                        "fireball": cv2.imread("assets/fireball_id.png", 0),
+                        "arrows": cv2.imread("assets/arrows_id.png", 0),
+                        "goblins": cv2.imread("assets/goblins_id.png", 0),
+                        "knight": cv2.imread("assets/knight_id.png", 0),
+                        "minions": cv2.imread("assets/minions_id.png", 0),
+                        "prince": cv2.imread("assets/prince_id.png", 0),
+                        "archers": cv2.imread("assets/archers_id.png", 0),}
 
-        deck_stats = pd.read_csv(r"E:\RL\Clash Royale\workspace\card_stats\cards.txt", index_col="name")
+        deck_stats = pd.read_csv("card_info/cards.txt", index_col="name")
         self.deck_stats = pd.get_dummies(deck_stats)
-        self.cards_stats: pd.DataFrame = ClashDataLoader().load_data()
-        self.tower_stats = pd.read_csv(r"E:\RL\Clash Royale\workspace\card_stats\towers.txt", index_col="type")
+        self.card_stats = ClashDataLoader().load_data()
+        self.tower_stats = pd.read_csv("card_info/towers.txt", index_col="type")
+        self.grayscale = lambda x: np.expand_dims(cv2.cvtColor(x, cv2.COLOR_RGB2GRAY), -1)
         
-    def get_curr_hand(self, img) -> list[str]:
+    def get_curr_hand(self, img):
         curr_hand = []
+        img = self.grayscale(img)
         for card, template in self.card_id.items():
             res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
-            threshold = 0.7
+            threshold = 0.8
             loc = np.where( res >= threshold)
             if len(loc[0]) == 0: ...
             else: 
@@ -93,17 +58,32 @@ class Decks:
                 
         return curr_hand
     
-    def get_card_features(self, img) -> np.ndarray:
-        card_feats = np.zeros((4, 24))
+    def get_card_features(self, img, params):
+        
+        time = params['time']
+        elixir = params['elixir']
+        enemy_positions = params['enemy_positions']
+        #Filling up max_enemies array
+        max_enemies = np.zeros((30, 2)) #able to recognize a maximum of 20 enemies troops
+        if len(enemy_positions) > 0:
+            for i in range(len(enemy_positions)):
+                if i == 30:
+                    break
+                max_enemies[i] = enemy_positions[i]
+        max_enemies = self.scaler.fit_transform(max_enemies).flatten()
+        #
         tower_feats = self.tower_stats.values
         tower_feats = self.scaler.fit_transform(tower_feats).flatten()
+        #
+        card_feats = np.zeros((4, 24))
         cards = self.get_curr_hand(img)
         for i,card in enumerate(cards):
             card_feats[i] = self.deck_stats.loc[card].values
-        card_feats = self.scaler.fit_transform(card_feats)
-        card_feats = card_feats.flatten()
-        all_feats = np.concatenate((card_feats, tower_feats))
-        
+        card_feats = self.scaler.fit_transform(card_feats).flatten()
+        #
+        add_feats = np.array([[time], [elixir]])
+        add_feats = self.scaler.fit_transform(add_feats).flatten()
+        all_feats = np.concatenate((card_feats, tower_feats, max_enemies, add_feats))
         return all_feats
     
 class GameHelper:
@@ -113,19 +93,19 @@ class GameHelper:
         self.time = 180
         self.curr_elixir = 5
         self.scaler = StandardScaler()
-        self.tower_id = {"king_t": cv2.imread(r"E:\RL\Clash\assets\kingt_id.png", 0),
-                            "princess_t": cv2.imread(r"E:\RL\Clash\assets\princesst_id.png", 0),
-                            "eking_t": cv2.imread(r"E:\RL\Clash\assets\ekingt_id.png", 0),
-                            "eprincesst": cv2.imread(r"E:\RL\Clash\assets\eprincesst_id.png", 0)
+        self.tower_id = {"king_t": cv2.imread("assets/kingt_id.png", 0),
+                            "princess_t": cv2.imread("assets/princesst_id.png", 0),
+                            "eking_t": cv2.imread("assets/ekingt_id.png", 0),
+                            "eprincesst": cv2.imread("assets/eprincesst_id.png", 0)
                             }
-        self.enemy_level_id = {1: (cv2.imread("red-level01.png"), .75),
-                               2: (cv2.imread("red-level02.png"), .72),
-                               3: (cv2.imread("red-level03.png"), .78),
-                               4: (cv2.imread("red-level04.png"), .75),
-                               5: (cv2.imread("red-level05.png"), .78),
-                               6: (cv2.imread("red-level06.png"), .75),
-                               7: (cv2.imread("red-level07.png"), .78),
-                               8: (cv2.imread("red-level08.png"), .75),}
+        self.enemy_level_id = {1: (cv2.imread("assets/red-level01.png"), .75),
+                               2: (cv2.imread("assets/red-level02.png"), .72),
+                               3: (cv2.imread("assets/red-level03.png"), .78),
+                               4: (cv2.imread("assets/red-level04.png"), .75),
+                               5: (cv2.imread("assets/red-level05.png"), .78),
+                               6: (cv2.imread("assets/red-level06.png"), .75),
+                               7: (cv2.imread("assets/red-level07.png"), .78),
+                               8: (cv2.imread("assets/red-level08.png"), .75),}
        
     def screenshot(self, unprocessed: bool =False):
         with mss.mss() as sct:
@@ -137,7 +117,6 @@ class GameHelper:
         #img = GameHelper.add_imageProc(img)
         return img
     
-    @staticmethod
     def process_ocr(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         img = cv2.GaussianBlur(img, (7, 7), 0)
@@ -175,7 +154,7 @@ class GameHelper:
         time = int(time[0])*60 + int(time[1])
         return time
     
-    def tower_count(self, img) -> tuple[int, int]:
+    def tower_count(self, img):
         friendly_count = 0
         enemy_count = 0
         for tower,template in self.tower_id.items():
@@ -202,6 +181,23 @@ class GameHelper:
         except:
             elixir = self.curr_elixir
         return elixir
+    
+    def get_state_params(self, img):
+        img = img[:,:,:3] # removing alpha channel
+        params = {}
+        enemy_positions = self.find_enemies(img)
+        #elixir = self.read_elixir(img)
+        #time = self.read_time(img)
+        elixir = 10
+        time = 179
+        tower_count = (3, 2)#self.tower_count(img)
+        
+        params['enemy_positions'] = enemy_positions
+        params['tower_count'] = tower_count
+        params['elixir'] = elixir
+        params['time'] = time
+        
+        return params
         
     @staticmethod
     def on_home_screen(img) -> bool:
@@ -213,7 +209,7 @@ class GameHelper:
         else: return True
         
     @staticmethod
-    def on_party_screen(img) -> bool:
+    def on_party_screen(img):
         template = cv2.imread('assets/party_id.png', 0)
         res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
         threshold = 0.9
@@ -231,7 +227,7 @@ class GameHelper:
         else: return True
         
     @staticmethod
-    def on_end_game_screen(img) -> bool:
+    def on_end_game_screen(img):
         template = cv2.imread('assets/end_game_id.png', 0)
         res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
         threshold = 0.6
@@ -239,14 +235,28 @@ class GameHelper:
         if len(loc[0]) == 0: return False
         else: return True
         
-    def find_enemies(self, img) - list[tuple[int, tuple[np.ndarray, np.ndarray]] : 
+    def find_enemies(self, img):
         to_bgr = lambda x: cv2.cvtColor(x, cv2.COLOR_BGR2RGB)
         enemies = []
         for level, (template, threshold) in self.enemy_level_id.items():
-            template = to_bgr(template)
+            #template = to_bgr(template)
             res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
             loc = np.where( res >= threshold)
             if len(loc[0]) == 0: ...
-            else: enemies.append((level, loc))
+            else:
+                lvl_enemies = self.check_distance(loc)
+                enemies += lvl_enemies
             
         return enemies
+    
+    def check_distance(self, loc):
+        enemy_positions = []
+        for i in range(len(loc[0])-1):
+            dist = np.sqrt((loc[0][i+1] - loc[0][i])**2 + (loc[1][i+1] - loc[1][i])**2)
+            if dist <= 1:
+                ...
+            else:
+                enemy_positions.append((loc[0][i], loc[1][i+1]))
+                if i == len(loc[0])-2:
+                    enemy_positions.append((loc[0][i+1], loc[1][i+1]))
+        return enemy_positions
