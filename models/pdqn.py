@@ -1,11 +1,14 @@
-from models.actor_critic import ActorNet, CriticNet
-from utils.buffer import MemoryBuffer
-from utils.noise import OUActionNoise
-from utils.config import CONV_FILTERS, CONV_KERNEL_SIZES, CONV_STRIDES, CONV_T_FILTERS, CONV_T_KERNEL_SIZES, CONV_T_STRIDES, Z_DIM, NORMALIZE, INPUT_DIM
-from models.autoencoder import VariationalAutoencoder as VAE
 import numpy as np
 import tensorflow as tf
 import random
+
+from utils.buffer import MemoryBuffer
+from utils.noise import OUActionNoise
+from utils.config import CONV_FILTERS, CONV_KERNEL_SIZES, CONV_STRIDES, CONV_T_FILTERS, CONV_T_KERNEL_SIZES, CONV_T_STRIDES, Z_DIM, NORMALIZE, INPUT_DIM
+#---import all models---
+from models.autoencoder import VariationalAutoencoder as VAE
+from models.parameter_network import ParamNet
+from models.DQN import DDQNet
 
 
 
@@ -43,8 +46,8 @@ class PDQN:
         
         # initialize actor & critic and its targets
         self.discount_factor = 0.99
-        self.actor = ActorNet(self.obs_dim, self.act_dim, self.action_bound, lr_=1e-4,tau_=1e-3)
-        self.critic = CriticNet(self.obs_dim, self.act_dim, lr_=1e-3,tau_=1e-3,discount_factor=self.discount_factor)
+        self.actor = ParamNet(self.obs_dim, self.act_dim, self.action_bound, lr_=1e-4,tau_=1e-3)
+        self.critic = DDQNet(self.obs_dim, self.act_dim, lr_=1e-3,tau_=1e-3,discount_factor=self.discount_factor)
         
         # Experience Buffer
         self.with_per = w_per #Priority Experience Replay
@@ -84,15 +87,12 @@ class PDQN:
         """ Train actor & critic from sampled experience
         """ 
         z_dim = self.vae.encoder.predict(np.array(obs[0], dtype=np.float32))
-        # update critic
         obs[1] = np.array(obs[1], dtype=np.float32)
         acts = np.array(acts, dtype=np.float32)
         obs = [z_dim, obs[1]]
+	
+	# update critic
         self.critic.train(obs, acts, critic_target)
-        
-        # get next action and Q-value Gradient
-        n_actions = self.actor.network.predict(obs)
-        q_grads = self.critic.Qgradient(obs, n_actions)
         
         # update actor
         self.actor.train(obs,self.critic.network)
@@ -109,7 +109,6 @@ class PDQN:
             # sample from buffer
             states1,states2, actions, rewards, dones, new_states1,new_states2, idx = self.sample_batch(self.batch_size)
             
-            #print(new_states1.shape)
             z_dim = self.vae.encoder.predict(np.array(new_states1, dtype=np.float32))
             new_states2 = np.array(new_states2, dtype=np.float32)
             new_states = [z_dim, new_states2]
@@ -126,7 +125,7 @@ class PDQN:
                     critic_target[i] = rewards[i] + self.discount_factor * np.max(q_vals[i])
                     
                 if self.with_per:
-                    self.buffer.update(idx[i], abs(q_vals[i]-critic_target[i]))
+                    self.buffer.update(idx[i], abs(q_vals[i]-critic_target[i])[0])
                     
             # train(or update) the actor & critic and target networks
             self.update_networks([states1, states2], actions, critic_target)
