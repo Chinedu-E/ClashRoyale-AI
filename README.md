@@ -7,7 +7,7 @@ action space:
  - 0 - NOOP
  - 1 - 4 (corresponding card in hand)
  
-**position**: Box(0, 1, shape = (), float)
+**position**: game screen boundary
 
 Observation space:
 
@@ -37,3 +37,10 @@ Card features include:
  - area damage
  - radius
  - elixir cost
+# References
+
+ - https://github.com/davidADSP/GDL_code
+ - https://github.com/lollcat/RL-Process-Design
+ - https://arxiv.org/abs/1511.06581
+ - https://arxiv.org/pdf/1803.10122.pdf
+ - https://arxiv.org/abs/1810.06394
