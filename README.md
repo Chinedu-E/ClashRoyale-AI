@@ -44,3 +44,4 @@ Card features include:
  - https://arxiv.org/abs/1511.06581
  - https://arxiv.org/pdf/1803.10122.pdf
  - https://arxiv.org/abs/1810.06394
+ - https://www.ijcai.org/proceedings/2019/0631.pdf
