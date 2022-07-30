@@ -30,20 +30,20 @@ class Decks:
     
     def __init__(self):
         self.scaler = StandardScaler()
-        self.card_id = {"giant": cv2.imread("assets/giant_id.png", 0),
-                        "fireball": cv2.imread("assets/fireball_id.png", 0),
-                        "arrows": cv2.imread("assets/arrows_id.png", 0),
-                        "goblins": cv2.imread("assets/goblins_id.png", 0),
-                        "knight": cv2.imread("assets/knight_id.png", 0),
-                        "minions": cv2.imread("assets/minions_id.png", 0),
-                        "prince": cv2.imread("assets/prince_id.png", 0),
-                        "archers": cv2.imread("assets/archers_id.png", 0),}
+        self.card_id = {"giant": cv2.imread("assets/giant_id.png",0),
+                        "fireball": cv2.imread("assets/fireball_id.png",0),
+                        "arrows": cv2.imread("assets/arrows_id.png",0),
+                        "goblins": cv2.imread("assets/goblins_id.png",0),
+                        "knight": cv2.imread("assets/knight_id.png",0),
+                        "minions": cv2.imread("assets/minions_id.png",0),
+                        "prince": cv2.imread("assets/prince_id.png",0),
+                        "archers": cv2.imread("assets/archers_id.png",0),}
 
         deck_stats = pd.read_csv("card_info/cards.txt", index_col="name")
         self.deck_stats = pd.get_dummies(deck_stats)
         self.card_stats = ClashDataLoader().load_data()
         self.tower_stats = pd.read_csv("card_info/towers.txt", index_col="type")
-        self.grayscale = lambda x: np.expand_dims(cv2.cvtColor(x, cv2.COLOR_RGB2GRAY), -1)
+        self.grayscale = lambda x: cv2.cvtColor(x, cv2.COLOR_BGRA2GRAY)
         
     def get_curr_hand(self, img):
         curr_hand = []
@@ -64,7 +64,7 @@ class Decks:
         elixir = params['elixir']
         enemy_positions = params['enemy_positions']
         #Filling up max_enemies array
-        max_enemies = np.zeros((30, 2)) #able to recognize a maximum of 20 enemies troops
+        max_enemies = np.zeros((30, 2)) #able to recognize a maximum of 30 enemies troops
         if len(enemy_positions) > 0:
             for i in range(len(enemy_positions)):
                 if i == 30:
@@ -77,13 +77,13 @@ class Decks:
         #
         card_feats = np.zeros((4, 24))
         cards = self.get_curr_hand(img)
+        print(cards)
         for i,card in enumerate(cards):
             card_feats[i] = self.deck_stats.loc[card].values
+
         card_feats = self.scaler.fit_transform(card_feats).flatten()
         #
-        add_feats = np.array([[time], [elixir]])
-        add_feats = self.scaler.fit_transform(add_feats).flatten()
-        all_feats = np.concatenate((card_feats, tower_feats, max_enemies, add_feats))
+        all_feats = np.concatenate((card_feats, tower_feats, max_enemies))
         return all_feats
     
 class GameHelper:
@@ -93,13 +93,12 @@ class GameHelper:
         self.time = 180
         self.curr_elixir = 5
         self.scaler = StandardScaler()
-        self.tower_id = {"king_t": cv2.imread("assets/kingt_id.png", 0),
-                            "princess_t": cv2.imread("assets/princesst_id.png", 0),
-                            "eking_t": cv2.imread("assets/ekingt_id.png", 0),
-                            "eprincesst": cv2.imread("assets/eprincesst_id.png", 0)
-                            }
+        self.to_rgb = lambda x: cv2.cvtColor(x, cv2.COLOR_BGR2RGB)
+        self.tower_id = {"princess_t": (cv2.imread("assets/princesst_id.png"), .70),
+                        "eprincesst": (cv2.imread("assets/eprincesst_id.png"), .75)
+                        }
         self.enemy_level_id = {1: (cv2.imread("assets/red-level01.png"), .75),
-                               2: (cv2.imread("assets/red-level02.png"), .72),
+                               2: (cv2.imread("assets/red-level02.png"), .75),
                                3: (cv2.imread("assets/red-level03.png"), .78),
                                4: (cv2.imread("assets/red-level04.png"), .75),
                                5: (cv2.imread("assets/red-level05.png"), .78),
@@ -140,40 +139,43 @@ class GameHelper:
         image = np.expand_dims(cv2.resize(image, (160, 208)), -1)
         return image
 
-    @staticmethod 
-    def read_time(img) -> int:
-        time_img = img[100:200, 350:600] #cropping for time portion (gotten through experiments)
-        #time_img = np.expand_dims(time_img, -1)
-        time = READER.readtext(img)
-        print(time[2])
-        time: str = time[2][1]
-        if ':' in time:
-            time = time.split(':')
-        else:
-            time = time.split('.')
-        time = int(time[0])*60 + int(time[1])
+
+    def read_time(self, img) -> int:
+        time_img = img[20:70, 370:500] #cropping for time portion (gotten through experiments)
+        time = READER.readtext(time_img)
+        try:
+            time: str = time[0][1]
+
+            if ':' in time:
+                time = time.split(':')
+            else:
+                time = time.split('.')
+
+                time = int(time[0])*60 + int(time[1])
+                self.time = time
+        except:
+            time = self.time
+        
         return time
     
     def tower_count(self, img):
-        friendly_count = 0
-        enemy_count = 0
-        for tower,template in self.tower_id.items():
+        friendly_count = 1
+        enemy_count = 1
+        for tower,(template, threshold) in self.tower_id.items():
             res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
-            threshold = 0.7
-            if tower == "eking_t":
-                threshold = 0.85
             loc = np.where( res >= threshold)
             if len(loc[0]) == 0: ...
             else: 
+                new_loc = self.check_distance(loc)
                 if tower.startswith("e"):
-                    enemy_count += len(loc[0])
+                    enemy_count += len(new_loc)
                 else: 
-                    friendly_count += len(loc[0])
+                    friendly_count += len(new_loc)
                     
         return friendly_count, enemy_count
 
     def read_elixir(self, img) -> int:
-        elixir_img = img[787: 810, 110:150]
+        elixir_img = img[780: 812, 115:150]
         elixir = READER.readtext(elixir_img)
         try:
             elixir = int(elixir[0][1])
@@ -184,13 +186,12 @@ class GameHelper:
     
     def get_state_params(self, img):
         img = img[:,:,:3] # removing alpha channel
+        img = self.to_rgb(img)
         params = {}
         enemy_positions = self.find_enemies(img)
-        #elixir = self.read_elixir(img)
-        #time = self.read_time(img)
-        elixir = 10
-        time = 179
-        tower_count = (3, 2)#self.tower_count(img)
+        elixir = self.read_elixir(img)
+        time = self.read_time(img)
+        tower_count = self.tower_count(img)
         
         params['enemy_positions'] = enemy_positions
         params['tower_count'] = tower_count
@@ -236,27 +237,30 @@ class GameHelper:
         else: return True
         
     def find_enemies(self, img):
-        to_bgr = lambda x: cv2.cvtColor(x, cv2.COLOR_BGR2RGB)
         enemies = []
-        for level, (template, threshold) in self.enemy_level_id.items():
-            #template = to_bgr(template)
+        for _, (template, threshold) in self.enemy_level_id.items():
+            template = self.to_rgb(template)
             res = cv2.matchTemplate(img,template,cv2.TM_CCOEFF_NORMED)
             loc = np.where( res >= threshold)
-            if len(loc[0]) == 0: ...
+            if len(loc[0]) <= 1: ...
             else:
                 lvl_enemies = self.check_distance(loc)
                 enemies += lvl_enemies
             
         return enemies
     
-    def check_distance(self, loc):
-        enemy_positions = []
+    def check_distance(self, loc: tuple):
+        positions = []
+        loc = list(loc)
+        loc[0] = np.sort(loc[0])
+        loc[1] = np.sort(loc[1])
+        
         for i in range(len(loc[0])-1):
             dist = np.sqrt((loc[0][i+1] - loc[0][i])**2 + (loc[1][i+1] - loc[1][i])**2)
-            if dist <= 1:
+            if dist <= 2:
                 ...
             else:
-                enemy_positions.append((loc[0][i], loc[1][i+1]))
-                if i == len(loc[0])-2:
-                    enemy_positions.append((loc[0][i+1], loc[1][i+1]))
-        return enemy_positions
+                positions.append((loc[0][i], loc[1][i]))
+            if i == len(loc[0])-2:
+                positions.append((loc[0][i+1], loc[1][i+1]))
+        return positions
