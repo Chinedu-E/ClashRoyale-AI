@@ -24,6 +24,7 @@ Card features include:
  - current princess towers hitpoints and damage per second
  - 2x elixir (bool)
  - XY positions of enemy troops on the board (max of 50)
+ 
  Then for each card in hand and next; 
  - card type (categorical, Troop | Spell)
  - damage per second
