@@ -18,7 +18,7 @@ class ClashRoyaleEnv(Env):
                                  "position" : Box(low= np.array([45, 150]), high=np.array([405, 600]), shape =(2,), dtype = int)}
                                  )
         self.observation_space= Dict({"image": Box(low=0, high=1, shape=(208, 160, 1), dtype=float),
-                                      'features': Box(low=0, high=1, shape=(166,), dtype=float)})
+                                      'features': Box(low=0, high=1, shape=(164,), dtype=float)})
         self.helper = GameHelper()
         self.deck = Decks()
         self.recorder = Recorder()
@@ -49,14 +49,15 @@ class ClashRoyaleEnv(Env):
             diff = self.action_space['position'].high - self.action_space['position'].low
             offset = diff * position
             position = self.action_space['position'].low + offset
-            pyautogui.click(tuple(np.abs(position)))
+            pyautogui.click(tuple(position))
             
         pos = tuple(position) if card_choice != 0 else (0, 0)   
-        self.recorder.save_action((card_choice, pos))
+        #self.recorder.save_action((card_choice, pos))
         
         img_state = self.helper.screenshot(unprocessed=True)
         
         params = self.helper.get_state_params(img_state)
+        params["action"] = (card_choice, pos)
         card_state = self.deck.get_card_features(img_state, params)
         reward = self.reward_function(params)
         
@@ -72,30 +73,58 @@ class ClashRoyaleEnv(Env):
     def reset(self):
         ''' Takes us back to the home screen
         '''
-        time.sleep(0.5)
+        time.sleep(5.5)
         pyautogui.click(232, 740)      
         
     def reward_function(self, params):
         reward = 0
         past_params = self.recorder.past
+        troop_reward = self.troop_reward(params, past_params)
+        tower_reward = self.tower_reward(params, past_params)
+        card_reward = self.card_reward(params, past_params)
+            
+        reward = troop_reward + tower_reward + card_reward
+        self.recorder(params)
+        
+        return reward
+    
+    def troop_reward(self, params, past_params):
+        reward = 0
         enemy_positions = params['enemy_positions']
         n_enemies = len(enemy_positions)
         past_n_enemies = len(past_params['enemy_positions'])
-        friend_tower, enemy_tower = params['tower_count']
-        past_friend_tower, past_enemy_tower = past_params['tower_count']
-        
         if n_enemies < past_n_enemies:
             reward  = 5
+        elif n_enemies == past_n_enemies:
+            reward = -10
             
+        return reward
+        
+    
+    def tower_reward(self, params, past_params):
+        reward = 0
+        friend_tower, enemy_tower = params['tower_count']
+        past_friend_tower, past_enemy_tower = past_params['tower_count']
         if past_friend_tower > friend_tower:
             reward = -30
             
         if past_enemy_tower > enemy_tower:
             reward = 20
             
-        self.recorder(params)
-        
         return reward
+        
+    def card_reward(self, params, past_params):
+        reward = 0
+        past_action = past_params['action']
+        action = params['action']
+        if action[0] != 0 and past_action[0] != 0:
+            midXY = np.array((230, 400))
+            currXY = np.array(action[1])
+            distance = np.linalg.norm(currXY - midXY)
+            reward = -0.2 * distance
+            
+        return reward
+        
         
     def start(self):
         '''Takes us from the home screen into the game
@@ -106,9 +135,9 @@ class ClashRoyaleEnv(Env):
         pyautogui.click(self.dm_menu_pos)
         time.sleep(0.4)
         pyautogui.click(self.tc_pos)
-        time.sleep(0.4)
+        time.sleep(0.6)
         pyautogui.click(self.ok_pos)
-        time.sleep(0.3)
+        time.sleep(0.6)
         screen = self.helper.screenshot()
         time.sleep(0.3)
         while True:
